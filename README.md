@@ -77,7 +77,7 @@ finale percutante.
 
 ## Flux utilisateur
 
-### Élève (groupe)
+### Élèves (groupes)
 
 1. Accueil → saisir le code session reçu → "Rejoindre"
 2. Choisir un numéro de groupe + nom d'équipe optionnel
