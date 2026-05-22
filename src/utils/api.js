@@ -1,23 +1,21 @@
-// Module API - gère tous les appels HTTP vers le back-end.
-// L'URL est configurable via variable d'env Vite (VITE_API_URL) ou via localStorage.
+// Module API mis à jour pour la version PHP du back.
+// Différences vs version Node :
+// - URL par défaut pointe vers le back PHP sur doodax.ch
+// - Quelques endpoints adaptés (params via querystring)
+// - Pas de WebSocket : tout passe par HTTP
 
-const DEFAULT_API_URL = 'https://datamarket-production.up.railway.app';
+const DEFAULT_API_URL = 'https://www.doodax.ch/datamarket';
 
 export function getApiUrl() {
-  // 1. Variable d'env Vite (prod)
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-  // 2. localStorage (override possible)
   const stored = localStorage.getItem('api_url');
   if (stored) return stored;
-  // 3. Défaut
   return DEFAULT_API_URL;
 }
 
 export function setApiUrl(url) {
   localStorage.setItem('api_url', url);
 }
-
-// === Auth enseignant·e ===
 
 export function getTeacherToken() {
   return localStorage.getItem('teacher_token');
@@ -31,8 +29,6 @@ export function setTeacherToken(token) {
 export function isTeacherAuthenticated() {
   return !!getTeacherToken();
 }
-
-// === Helpers fetch ===
 
 async function fetchJSON(path, options = {}) {
   const url = `${getApiUrl()}${path}`;
@@ -55,19 +51,14 @@ async function fetchJSON(path, options = {}) {
   return data;
 }
 
-// === Endpoints ===
-
 export const api = {
-  // Config & santé
   health: () => fetchJSON('/api/health'),
   getConfig: () => fetchJSON('/api/config'),
 
-  // Auth
   login: (password) => fetchJSON('/api/auth/login', {
     method: 'POST', body: JSON.stringify({ password })
   }),
 
-  // Sessions
   createSession: (data) => fetchJSON('/api/sessions', {
     method: 'POST', auth: true, body: JSON.stringify(data)
   }),
@@ -89,7 +80,6 @@ export const api = {
     return res.blob();
   },
 
-  // Groupes
   updatePurchases: (groupId, purchases) => fetchJSON(`/api/groups/${groupId}/purchases`, {
     method: 'PUT', body: JSON.stringify({ purchases })
   }),
