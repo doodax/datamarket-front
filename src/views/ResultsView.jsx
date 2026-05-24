@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, ChevronLeft, ChevronRight, TrendingUp, Users, BarChart3, FileDown, Trophy } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, ChevronLeft, ChevronRight, TrendingUp, BarChart3, FileDown, Trophy } from 'lucide-react';
 import Logo from '../components/Logo';
 import CompanyLogo from '../components/CompanyLogo';
 import { api } from '../utils/api';
@@ -19,22 +19,43 @@ export default function ResultsView({ role }) {
   const navigate = useNavigate();
   const { config } = useConfig();
   const { sessionState, groups, reports, synthesis, error } = useSessionSocket(code, role);
+
+  // === TOUS les hooks doivent être appelés AVANT tout return conditionnel ===
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [viewMode, setViewMode] = useState('individual'); // 'individual' | 'synthesis'
+  const [viewMode, setViewMode] = useState('individual');
 
-  // Si pas encore de reports, charger depuis l'API
-  const [fetchedReports, setFetchedReports] = useState(null);
+  // Si les reports changent (ex: nouvelle mission), reset l'index si hors limites
   useEffect(() => {
-    if (!reports && sessionState?.state === 'revealed') {
-      // Force un appel à reveal pour récupérer reports
-      api.revealSession(code)
-        .then(data => setFetchedReports(data))
-        .catch(() => {});
+    if (reports && currentIndex >= reports.length) {
+      setCurrentIndex(0);
     }
-  }, [reports, sessionState, code]);
+  }, [reports, currentIndex]);
 
-  const finalReports = reports || fetchedReports?.reports;
-  const finalSynthesis = synthesis || fetchedReports?.synthesis;
+  // categoriesMap calculé toujours (config peut être null au départ, on protège)
+  const categoriesMap = useMemo(() => {
+    if (!config?.dataCatalog?.data_categories) return {};
+    return Object.fromEntries(config.dataCatalog.data_categories.map(c => [c.id, c]));
+  }, [config]);
+
+  // Polling déclenche l'inclusion de reports dans l'état dès que session.state === 'revealed'
+  // (c'est géré par useSessionSocket, qui lit directement reports/synthesis depuis /api/sessions/CODE/state)
+  // Donc on n'a PLUS besoin d'appeler api.revealSession() ici depuis le client.
+
+  const handleExport = useCallback(async () => {
+    try {
+      const blob = await api.exportSession(code);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `session-${code}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [code]);
+
+  // === Returns conditionnels APRÈS tous les hooks ===
 
   if (!config || !sessionState) {
     return (
@@ -44,7 +65,7 @@ export default function ResultsView({ role }) {
     );
   }
 
-  if (sessionState.state !== 'revealed' || !finalReports) {
+  if (sessionState.state !== 'revealed' || !reports) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md">
@@ -60,21 +81,9 @@ export default function ResultsView({ role }) {
     );
   }
 
-  const handleExport = async () => {
-    try {
-      const blob = await api.exportSession(code);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `session-${code}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) { console.error(err); }
-  };
-
-  const currentReport = finalReports[currentIndex];
+  // À ce stade : config OK, sessionState OK, reports OK
+  const currentReport = reports[currentIndex];
   const currentMission = currentReport ? config.missionsConfig.missions[currentReport.mission_id] : null;
-  const categoriesMap = useMemo(() => Object.fromEntries((config.dataCatalog?.data_categories || []).map(c => [c.id, c])), [config]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -133,7 +142,6 @@ export default function ResultsView({ role }) {
 
         {viewMode === 'individual' && currentReport && currentMission && (
           <>
-            {/* Navigation entre rapports */}
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
@@ -144,11 +152,11 @@ export default function ResultsView({ role }) {
                 Précédent
               </button>
               <div className="text-xs font-mono text-ink-300">
-                {currentIndex + 1} / {finalReports.length}
+                {currentIndex + 1} / {reports.length}
               </div>
               <button
-                onClick={() => setCurrentIndex(Math.min(finalReports.length - 1, currentIndex + 1))}
-                disabled={currentIndex === finalReports.length - 1}
+                onClick={() => setCurrentIndex(Math.min(reports.length - 1, currentIndex + 1))}
+                disabled={currentIndex === reports.length - 1}
                 className="btn-ghost flex items-center gap-1.5 disabled:opacity-30"
               >
                 Suivant
@@ -164,8 +172,12 @@ export default function ResultsView({ role }) {
           </>
         )}
 
-        {viewMode === 'synthesis' && finalSynthesis && (
-          <SynthesisView synthesis={finalSynthesis} reports={finalReports} config={config} onSelectReport={(i) => { setCurrentIndex(i); setViewMode('individual'); }} />
+        {viewMode === 'synthesis' && synthesis && (
+          <SynthesisView
+            synthesis={synthesis}
+            reports={reports}
+            onSelectReport={(i) => { setCurrentIndex(i); setViewMode('individual'); }}
+          />
         )}
       </main>
     </div>
@@ -190,7 +202,6 @@ function ReportCard({ report, mission, categoriesMap }) {
 
   return (
     <div className="animate-fade-in space-y-4">
-      {/* Header */}
       <div className="panel-bordered p-5 flex items-start gap-4">
         <CompanyLogo logoStyle={mission.logo_style} color={mission.color_palette.primary} size={48} />
         <div className="flex-1">
@@ -205,7 +216,6 @@ function ReportCard({ report, mission, categoriesMap }) {
         </div>
       </div>
 
-      {/* Chiffres clés */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <StatBlock label="Investissement données" value={`${report.spending}`} suffix="CHF" color="text-ink-100" />
         <StatBlock label="Revenu généré" value={`${report.revenue.toLocaleString('fr-CH')}`} suffix="CHF" color="text-terminal-cyan" />
@@ -217,7 +227,6 @@ function ReportCard({ report, mission, categoriesMap }) {
         />
       </div>
 
-      {/* Profil débloqué */}
       <div className={`p-5 border-2 ${risk.border} ${risk.bg} animate-slide-up`}>
         <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-ink-300 mb-2">
           Profil ciblé débloqué
@@ -242,10 +251,8 @@ function ReportCard({ report, mission, categoriesMap }) {
         )}
       </div>
 
-      {/* Détails selon modèle économique */}
       <ReportDetails report={report} mission={mission} />
 
-      {/* Achats */}
       <div className="panel-bordered p-5">
         <div className="section-header mb-3">Données acquises</div>
         {report.purchases.length === 0 ? (
@@ -280,17 +287,17 @@ function StatBlock({ label, value, suffix, color }) {
 }
 
 function ReportDetails({ report, mission }) {
-  const d = report.details;
+  const d = report.details || {};
 
   if (mission.economic_model === 'simple') {
     return (
       <div className="panel-bordered p-5">
         <div className="section-header mb-3">Conversion publicitaire</div>
         <div className="text-3xl font-mono font-bold text-terminal-cyan">
-          {d.clients} clients
+          {d.clients || 0} clients
         </div>
         <div className="text-xs text-ink-400 mt-1">
-          {d.client_value} CHF par client converti
+          {d.client_value || 0} CHF par client converti
         </div>
       </div>
     );
@@ -303,11 +310,11 @@ function ReportDetails({ report, mission }) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <div className="text-xs text-ink-300 mb-1">Clients neufs</div>
-            <div className="text-2xl font-mono font-bold text-ink-100">{d.clients_new}</div>
+            <div className="text-2xl font-mono font-bold text-ink-100">{d.clients_new || 0}</div>
           </div>
           <div>
             <div className="text-xs text-ink-300 mb-1">Clients récurrents</div>
-            <div className="text-2xl font-mono font-bold text-terminal-amber">{d.clients_recurring}</div>
+            <div className="text-2xl font-mono font-bold text-terminal-amber">{d.clients_recurring || 0}</div>
           </div>
         </div>
         {d.recurring_revenue_percent > 0 && (
@@ -329,18 +336,18 @@ function ReportDetails({ report, mission }) {
         <div className="grid grid-cols-3 gap-4">
           <div>
             <div className="text-xs text-ink-300 mb-1">Bons risques acceptés</div>
-            <div className="text-2xl font-mono font-bold text-terminal-green">{d.good_risks}</div>
-            <div className="text-[10px] font-mono text-ink-400">+{d.good_risks * mission.margin_good_risk} CHF</div>
+            <div className="text-2xl font-mono font-bold text-terminal-green">{d.good_risks || 0}</div>
+            <div className="text-[10px] font-mono text-ink-400">+{(d.good_risks || 0) * mission.margin_good_risk} CHF</div>
           </div>
           <div>
             <div className="text-xs text-ink-300 mb-1">Mauvais identifiés (rejetés)</div>
-            <div className="text-2xl font-mono font-bold text-terminal-amber">{d.bad_risks_identified}</div>
-            <div className="text-[10px] font-mono text-ink-400">+{d.bad_risks_identified * mission.margin_bad_risk_identified} CHF</div>
+            <div className="text-2xl font-mono font-bold text-terminal-amber">{d.bad_risks_identified || 0}</div>
+            <div className="text-[10px] font-mono text-ink-400">+{(d.bad_risks_identified || 0) * mission.margin_bad_risk_identified} CHF</div>
           </div>
           <div>
             <div className="text-xs text-ink-300 mb-1">Mauvais non détectés</div>
-            <div className="text-2xl font-mono font-bold text-terminal-red">{d.bad_risks_unidentified}</div>
-            <div className="text-[10px] font-mono text-ink-400">-{d.bad_risks_unidentified * mission.loss_bad_risk_unidentified} CHF</div>
+            <div className="text-2xl font-mono font-bold text-terminal-red">{d.bad_risks_unidentified || 0}</div>
+            <div className="text-[10px] font-mono text-ink-400">-{(d.bad_risks_unidentified || 0) * mission.loss_bad_risk_unidentified} CHF</div>
           </div>
         </div>
       </div>
@@ -354,17 +361,17 @@ function ReportDetails({ report, mission }) {
         <div className="grid grid-cols-2 gap-4 mb-3">
           <div>
             <div className="text-xs text-ink-300 mb-1">Clients solvables</div>
-            <div className="text-2xl font-mono font-bold text-terminal-green">{d.solvent}</div>
+            <div className="text-2xl font-mono font-bold text-terminal-green">{d.solvent || 0}</div>
           </div>
           <div>
             <div className="text-xs text-ink-300 mb-1">Clients en défaut</div>
-            <div className="text-2xl font-mono font-bold text-terminal-red">{d.insolvent}</div>
+            <div className="text-2xl font-mono font-bold text-terminal-red">{d.insolvent || 0}</div>
           </div>
         </div>
         <div className="pt-3 border-t border-ink-700/50">
           <div className="text-sm text-ink-100">
-            Taux de défaut : <span className="font-bold text-terminal-amber">{d.default_rate}%</span>
-            {d.default_rate > 40 && (
+            Taux de défaut : <span className="font-bold text-terminal-amber">{d.default_rate || 0}%</span>
+            {(d.default_rate || 0) > 40 && (
               <span className="text-xs text-ink-300 ml-2 italic">
                 Mécanisme caractéristique des crédits prédateurs (subprime).
               </span>
@@ -381,14 +388,13 @@ function ReportDetails({ report, mission }) {
 // ============================================================
 // SYNTHÈSE DE CLASSE
 // ============================================================
-function SynthesisView({ synthesis, reports, config, onSelectReport }) {
+function SynthesisView({ synthesis, reports, onSelectReport }) {
   const totalSensitive = synthesis.groups_with_sensitive_inference;
   const totalGroups = synthesis.total_groups;
   const percentSensitive = totalGroups > 0 ? Math.round((totalSensitive / totalGroups) * 100) : 0;
 
   return (
     <div className="animate-fade-in space-y-6">
-      {/* Phrase-choc */}
       <div className="panel-bordered p-8 text-center bg-gradient-to-br from-ink-800/80 to-ink-900">
         <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-ink-300 mb-3">
           Constat de classe
@@ -406,7 +412,6 @@ function SynthesisView({ synthesis, reports, config, onSelectReport }) {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <SynthStat icon={<TrendingUp size={20} />} label="Bénéfice le + élevé"
           value={`${synthesis.highest_profit.toLocaleString('fr-CH')} CHF`} color="text-terminal-green" />
@@ -417,7 +422,6 @@ function SynthesisView({ synthesis, reports, config, onSelectReport }) {
           color={synthesis.groups_with_critical_risk > 0 ? 'text-terminal-red' : 'text-ink-100'} />
       </div>
 
-      {/* Classement */}
       <div className="panel-bordered p-5">
         <div className="flex items-center gap-2 mb-4">
           <Trophy className="text-terminal-amber" size={20} />
@@ -451,7 +455,6 @@ function SynthesisView({ synthesis, reports, config, onSelectReport }) {
         </div>
       </div>
 
-      {/* Questions de débrief */}
       <div className="panel-bordered p-5 bg-ink-800/30">
         <div className="section-header mb-4">Questions de débrief</div>
         <ol className="space-y-3 text-sm leading-relaxed">
