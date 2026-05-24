@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, ShoppingCart, Wallet, Briefcase, FileText } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, AlertTriangle, ShoppingCart, Wallet, Briefcase, FileText, Clock } from 'lucide-react';
 import Logo from '../components/Logo';
 import Timer from '../components/Timer';
 import DataCard from '../components/DataCard';
@@ -16,7 +16,6 @@ export default function GroupView() {
   const navigate = useNavigate();
   const { config, loading: cfgLoading } = useConfig();
 
-  // État local du groupe (id, num) persisté entre rechargements
   const [groupInfo, setGroupInfo] = useState(() => {
     try {
       const saved = localStorage.getItem(`${STORAGE_KEY}_${code}`);
@@ -27,18 +26,17 @@ export default function GroupView() {
   const { connected, sessionState, groups, timerRemaining, error: socketError } =
     useSessionSocket(code, 'group', groupInfo?.id);
 
-  // Si pas encore identifié, montrer le formulaire de join
   if (!groupInfo) {
     return <GroupJoinForm code={code} onJoined={(g) => {
       localStorage.setItem(`${STORAGE_KEY}_${code}`, JSON.stringify({ id: g.id, group_number: g.group_number }));
       setGroupInfo({ id: g.id, group_number: g.group_number });
-    }} sessionState={sessionState} groups={groups} navigate={navigate} />;
+    }} navigate={navigate} />;
   }
 
   if (cfgLoading || !sessionState) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-ink-300 text-sm font-mono">
+        <div className="text-ink-300 text-base font-mono">
           {socketError ? `Erreur : ${socketError}` : 'Chargement de la session...'}
         </div>
       </div>
@@ -47,23 +45,27 @@ export default function GroupView() {
 
   const myGroup = groups.find(g => g.id === groupInfo.id);
   if (!myGroup) {
-    // Notre groupe a disparu de la liste — reset
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <div className="text-terminal-amber mb-4">Session introuvable</div>
+          <div className="text-terminal-amber mb-4">
+            Votre groupe n'est plus enregistré côté serveur.
+          </div>
+          <div className="text-base text-ink-300 mb-4">
+            Cela peut arriver si la session a été réinitialisée ou si vous étiez
+            connecté à une session antérieure.
+          </div>
           <button onClick={() => {
             localStorage.removeItem(`${STORAGE_KEY}_${code}`);
-            navigate('/');
+            window.location.reload();
           }} className="btn-primary">
-            Retour à l'accueil
+            Recommencer
           </button>
         </div>
       </div>
     );
   }
 
-  // Rediriger vers résultats si la session est révélée
   if (sessionState.state === 'revealed') {
     return <GroupResultsLoader code={code} groupId={myGroup.id} navigate={navigate} />;
   }
@@ -87,22 +89,44 @@ export default function GroupView() {
 }
 
 // ============================================================
-// FORMULAIRE DE JOIN
+// FORMULAIRE DE JOIN (avec polling et claimed_group_id)
 // ============================================================
-function GroupJoinForm({ code, onJoined, sessionState, groups, navigate }) {
+function GroupJoinForm({ code, onJoined, navigate }) {
   const [groupNumber, setGroupNumber] = useState('');
   const [label, setLabel] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  // Récupérer la session pour savoir combien de groupes max
   const [info, setInfo] = useState(null);
+
   useEffect(() => {
-    api.getSession(code).then(setInfo).catch(err => setError(err.message));
+    let cancelled = false;
+    const fetchInfo = () => {
+      api.getSession(code)
+        .then(data => {
+          if (!cancelled) {
+            setInfo(data);
+            if (error && error.includes('Session')) setError(null);
+          }
+        })
+        .catch(err => {
+          if (!cancelled) setError(err.message);
+        });
+    };
+    fetchInfo();
+    const interval = setInterval(fetchInfo, 2000);
+    return () => { cancelled = true; clearInterval(interval); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
   const maxGroups = info?.session?.num_groups || 4;
-  const takenNumbers = new Set((info?.groups || []).map(g => g.group_number));
+  const takenGroups = new Map((info?.groups || []).map(g => [g.group_number, g]));
+
+  const storedGroupInfo = useMemo(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_${code}`);
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  }, [code]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -110,7 +134,10 @@ function GroupJoinForm({ code, onJoined, sessionState, groups, navigate }) {
     setLoading(true);
     setError(null);
     try {
-      const { group } = await api.joinSession(code, parseInt(groupNumber), label || null);
+      const claimedId = (storedGroupInfo && storedGroupInfo.group_number === parseInt(groupNumber))
+        ? storedGroupInfo.id
+        : null;
+      const { group } = await api.joinSession(code, parseInt(groupNumber), label || null, claimedId);
       onJoined(group);
     } catch (err) {
       setError(err.message);
@@ -131,10 +158,10 @@ function GroupJoinForm({ code, onJoined, sessionState, groups, navigate }) {
       <main className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm space-y-6 animate-fade-in">
           <div className="text-center">
-            <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-ink-300 mb-1">Session</div>
+            <div className="text-xs font-mono uppercase tracking-[0.3em] text-ink-300 mb-1">Session</div>
             <div className="font-mono text-3xl text-terminal-cyan font-bold">{code}</div>
             {info?.session?.label && (
-              <div className="text-sm text-ink-300 mt-1">{info.session.label}</div>
+              <div className="text-base text-ink-300 mt-1">{info.session.label}</div>
             )}
           </div>
 
@@ -142,35 +169,52 @@ function GroupJoinForm({ code, onJoined, sessionState, groups, navigate }) {
             <div className="section-header">Identification</div>
 
             <div>
-              <label className="text-[10px] font-mono uppercase tracking-wider text-ink-300 block mb-2">
+              <label className="text-xs font-mono uppercase tracking-wider text-ink-300 block mb-2">
                 Quel groupe êtes-vous ?
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {Array.from({ length: maxGroups }, (_, i) => i + 1).map(n => {
-                  const taken = takenNumbers.has(n);
+                  const takenGroup = takenGroups.get(n);
+                  const taken = !!takenGroup;
+                  const isOwnGroup = storedGroupInfo && takenGroup && storedGroupInfo.id === takenGroup.id;
+                  const disabled = taken && !isOwnGroup;
+
                   return (
                     <button
                       key={n}
                       type="button"
-                      onClick={() => !taken && setGroupNumber(n.toString())}
-                      disabled={taken && groupNumber !== n.toString()}
-                      className={`h-12 border font-mono text-lg transition-colors ${
+                      onClick={() => !disabled && setGroupNumber(n.toString())}
+                      disabled={disabled}
+                      className={`h-14 border font-mono text-base transition-colors flex flex-col items-center justify-center ${
                         groupNumber === n.toString()
                           ? 'bg-terminal-cyan text-ink-900 border-terminal-cyan'
-                          : taken
+                          : disabled
                             ? 'bg-ink-800 border-ink-700 opacity-40 cursor-not-allowed'
-                            : 'bg-ink-800 border-ink-600 hover:border-ink-400'
+                            : isOwnGroup
+                              ? 'bg-ink-700 border-terminal-amber text-terminal-amber hover:bg-ink-600'
+                              : 'bg-ink-800 border-ink-600 hover:border-ink-400'
                       }`}
                     >
-                      G{n}{taken && groupNumber !== n.toString() && <div className="text-[8px]">pris</div>}
+                      <span className="font-bold">G{n}</span>
+                      {taken && (
+                        <span className="text-[9px] mt-0.5 leading-none truncate max-w-full px-1">
+                          {isOwnGroup ? 'vous' : (takenGroup.group_label || 'pris')}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
               </div>
+              {storedGroupInfo && (
+                <div className="text-xs text-terminal-amber mt-2 font-mono leading-relaxed">
+                  Vous avez déjà rejoint cette session en tant que G{storedGroupInfo.group_number}.
+                  Cliquez sur ce bouton pour reprendre votre place.
+                </div>
+              )}
             </div>
 
             <div>
-              <label className="text-[10px] font-mono uppercase tracking-wider text-ink-300 block mb-1.5">
+              <label className="text-xs font-mono uppercase tracking-wider text-ink-300 block mb-1.5">
                 Nom de votre équipe (optionnel)
               </label>
               <input
@@ -184,7 +228,7 @@ function GroupJoinForm({ code, onJoined, sessionState, groups, navigate }) {
             </div>
 
             {error && (
-              <div className="text-terminal-red text-xs flex items-start gap-2">
+              <div className="text-terminal-red text-sm flex items-start gap-2">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                 {error}
               </div>
@@ -209,7 +253,6 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
   const [errorMsg, setErrorMsg] = useState(null);
   const [showMission, setShowMission] = useState(true);
 
-  // Synchroniser avec le serveur
   useEffect(() => {
     setLocalPurchases(group.purchases);
   }, [group.purchases]);
@@ -223,12 +266,12 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
   }, [localPurchases, categoriesMap]);
 
   const budgetRemaining = mission.budget - spending;
-  const locked = group.locked || sessionState.state === 'locked' || sessionState.state === 'revealed';
   const setupPhase = sessionState.state === 'setup';
+  const locked = group.locked || sessionState.state === 'locked' || sessionState.state === 'revealed';
+  const catalogVisible = !setupPhase;  // Catalogue caché tant que le timer n'a pas démarré
 
-  // Toggle achat
   const togglePurchase = async (categoryId) => {
-    if (locked) return;
+    if (locked || setupPhase) return;
     const isSelected = localPurchases.includes(categoryId);
     let next;
     if (isSelected) {
@@ -251,12 +294,10 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
     } catch (err) {
       setErrorMsg(err.message);
       setSaveStatus('error');
-      // Revert
       setLocalPurchases(group.purchases);
     }
   };
 
-  // Section ouverture/fermeture détails mission
   const sections = config.dataCatalog?.sections || [];
   const dataByCat = useMemo(() => {
     const result = {};
@@ -273,7 +314,6 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Bandeau entreprise */}
       <header
         className="border-b-4 px-6 py-4"
         style={{
@@ -286,10 +326,10 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
             <CompanyLogo logoStyle={mission.logo_style} color={mission.color_palette.primary} size={48} />
             <div>
               <h1 className="font-display text-2xl text-ink-100">{mission.company_name}</h1>
-              <div className="text-xs text-ink-300">{mission.sector}</div>
+              <div className="text-sm text-ink-300">{mission.sector}</div>
             </div>
             <div className="hidden md:block pl-4 border-l border-ink-600">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-ink-300">Groupe</div>
+              <div className="text-xs font-mono uppercase tracking-wider text-ink-300">Groupe</div>
               <div className="font-mono text-lg text-terminal-cyan">
                 G{group.group_number} · {group.group_label || `Équipe ${group.group_number}`}
               </div>
@@ -304,102 +344,124 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
       </header>
 
       <main className="flex-1 px-6 py-6 max-w-7xl w-full mx-auto">
-        {/* Mission brief */}
+        {/* === MISSION : toujours affichée === */}
         {showMission && (
           <div className="panel-bordered p-5 mb-6 relative animate-slide-up">
-            <button
-              onClick={() => setShowMission(false)}
-              className="absolute top-3 right-3 text-ink-400 hover:text-ink-100 text-xs"
-            >
-              Masquer
-            </button>
+            {!setupPhase && (
+              <button
+                onClick={() => setShowMission(false)}
+                className="absolute top-3 right-3 text-ink-400 hover:text-ink-100 text-xs"
+              >
+                Masquer
+              </button>
+            )}
             <div className="section-header mb-3">Votre mission</div>
-            <p className="text-ink-100 text-sm leading-relaxed mb-3">{mission.brief}</p>
+            <p className="text-ink-100 text-base leading-relaxed mb-3">{mission.brief}</p>
 
             {mission.internal_note && (
               <div className="mt-4 border-l-2 border-terminal-red bg-terminal-red/5 px-4 py-3 relative">
-                <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-terminal-red mb-1">
+                <div className="text-xs font-mono uppercase tracking-[0.3em] text-terminal-red mb-1">
                   ⚠ Note interne — confidentiel
                 </div>
-                <p className="text-xs text-ink-100 italic">{mission.internal_note}</p>
+                <p className="text-sm text-ink-100 italic">{mission.internal_note}</p>
               </div>
             )}
           </div>
         )}
-        {!showMission && (
+        {!showMission && !setupPhase && (
           <button onClick={() => setShowMission(true)} className="btn-ghost flex items-center gap-1.5 mb-4">
             <FileText size={14} />
             Afficher la mission
           </button>
         )}
 
-        {/* Phase setup */}
+        {/* === PHASE SETUP : grand panneau d'attente, pas de catalogue === */}
         {setupPhase && (
-          <div className="bg-terminal-amber/10 border border-terminal-amber/30 px-4 py-3 mb-4 text-sm text-terminal-amber flex items-center gap-2">
-            <div className="w-2 h-2 bg-terminal-amber rounded-full animate-pulse" />
-            En attente du démarrage par l'administrateur·rice...
+          <div className="panel-bordered p-12 text-center animate-fade-in my-6">
+            <div className="inline-flex w-16 h-16 bg-ink-700 border border-terminal-amber items-center justify-center mb-6 animate-pulse">
+              <Clock size={32} className="text-terminal-amber" />
+            </div>
+            <div className="text-xs font-mono uppercase tracking-[0.3em] text-terminal-amber mb-3">
+              En attente
+            </div>
+            <h2 className="text-2xl font-display text-ink-100 mb-3">
+              Le marché des données ouvrira sous peu
+            </h2>
+            <p className="text-base text-ink-300 max-w-md mx-auto leading-relaxed">
+              Lisez attentivement votre mission ci-dessus.
+              Le catalogue des données disponibles s'ouvrira dès que l'administrateur·rice
+              aura démarré le compte à rebours.
+            </p>
+            <div className="mt-6 text-sm font-mono text-ink-400">
+              Budget alloué : <span className="text-terminal-cyan font-bold">{mission.budget} CHF</span>
+              {' · '}
+              Durée prévue : <span className="text-terminal-cyan font-bold">{Math.round(sessionState.timer_duration_seconds / 60)} min</span>
+            </div>
           </div>
         )}
 
-        {locked && (
+        {/* === LOCKED : message verrouillé === */}
+        {locked && !setupPhase && (
           <div className="bg-ink-800 border border-ink-500 px-4 py-3 mb-4 text-sm flex items-center gap-2">
             <AlertTriangle size={16} className="text-terminal-amber" />
             Session verrouillée. Vous ne pouvez plus modifier vos achats.
           </div>
         )}
 
-        {/* Header budget */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-          <StatPanel icon={<Wallet size={16} />} label="Budget restant" value={`${budgetRemaining} CHF`}
-            color={budgetRemaining < 100 ? 'text-terminal-amber' : 'text-terminal-cyan'} />
-          <StatPanel icon={<ShoppingCart size={16} />} label="Catégories achetées" value={localPurchases.length} />
-          <StatPanel icon={<Briefcase size={16} />} label="Investi" value={`${spending} CHF`} />
-        </div>
+        {/* === CATALOGUE : visible uniquement après démarrage du timer === */}
+        {catalogVisible && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+              <StatPanel icon={<Wallet size={18} />} label="Budget restant" value={`${budgetRemaining} CHF`}
+                color={budgetRemaining < 100 ? 'text-terminal-amber' : 'text-terminal-cyan'} />
+              <StatPanel icon={<ShoppingCart size={18} />} label="Catégories achetées" value={localPurchases.length} />
+              <StatPanel icon={<Briefcase size={18} />} label="Investi" value={`${spending} CHF`} />
+            </div>
 
-        {errorMsg && (
-          <div className="bg-terminal-red/10 border border-terminal-red/30 text-terminal-red px-4 py-3 mb-4 text-sm">
-            {errorMsg}
-          </div>
+            {errorMsg && (
+              <div className="bg-terminal-red/10 border border-terminal-red/30 text-terminal-red px-4 py-3 mb-4 text-sm">
+                {errorMsg}
+              </div>
+            )}
+
+            <div className="space-y-6">
+              {sections.map(section => (
+                <div key={section.id}>
+                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-ink-700">
+                    <div className="w-1 h-4" style={{ background: section.color }} />
+                    <h2 className="text-base font-mono uppercase tracking-[0.2em] text-ink-100">{section.label}</h2>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                    {(dataByCat[section.id] || []).map(category => {
+                      const selected = localPurchases.includes(category.id);
+                      const canAfford = budgetRemaining >= category.price || selected;
+                      const relevance = showHints ? mission.sector_relevance?.[category.id] : null;
+                      return (
+                        <DataCard
+                          key={category.id}
+                          category={category}
+                          selected={selected}
+                          disabled={!canAfford || locked}
+                          relevance={relevance}
+                          showDescription={showDescriptions}
+                          onClick={() => togglePurchase(category.id)}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
-        {/* Catalogue */}
-        <div className="space-y-6">
-          {sections.map(section => (
-            <div key={section.id}>
-              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-ink-700">
-                <div className="w-1 h-4" style={{ background: section.color }} />
-                <h2 className="text-sm font-mono uppercase tracking-[0.2em] text-ink-100">{section.label}</h2>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                {(dataByCat[section.id] || []).map(category => {
-                  const selected = localPurchases.includes(category.id);
-                  const canAfford = budgetRemaining >= category.price || selected;
-                  const relevance = showHints ? mission.sector_relevance?.[category.id] : null;
-                  return (
-                    <DataCard
-                      key={category.id}
-                      category={category}
-                      selected={selected}
-                      disabled={!canAfford || locked}
-                      relevance={relevance}
-                      showDescription={showDescriptions}
-                      onClick={() => togglePurchase(category.id)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer status */}
-        <div className="mt-8 pt-4 border-t border-ink-700/50 flex items-center justify-between text-xs">
-          <div className="text-ink-400 font-mono">
+        <div className="mt-8 pt-4 border-t border-ink-700/50 flex items-center justify-between text-sm">
+          <div className="text-ink-400 font-mono text-xs">
             All data sourced legally from third-party partners. Compliance: see terms.
           </div>
           <div className="flex items-center gap-3">
-            {saveStatus === 'saving' && <span className="text-ink-300">Sauvegarde...</span>}
-            {saveStatus === 'saved' && <span className="text-terminal-green">✓ Sauvegardé</span>}
+            {saveStatus === 'saving' && <span className="text-ink-300 text-xs">Sauvegarde...</span>}
+            {saveStatus === 'saved' && catalogVisible && <span className="text-terminal-green text-xs">✓ Sauvegardé</span>}
             <span className={`tag-live ${connected ? '' : 'opacity-50'}`}>{connected ? 'connecté' : 'reconnexion'}</span>
           </div>
         </div>
@@ -413,22 +475,19 @@ function StatPanel({ icon, label, value, color = 'text-ink-100' }) {
     <div className="panel-bordered p-3 flex items-center gap-3">
       <div className="text-ink-300">{icon}</div>
       <div className="flex-1">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-ink-300">{label}</div>
-        <div className={`text-xl font-mono font-bold ${color}`}>{value}</div>
+        <div className="text-xs font-mono uppercase tracking-wider text-ink-300">{label}</div>
+        <div className={`text-2xl font-mono font-bold ${color}`}>{value}</div>
       </div>
     </div>
   );
 }
 
-// ============================================================
-// LOADER POUR LES RÉSULTATS GROUPE
-// ============================================================
 function GroupResultsLoader({ code, groupId, navigate }) {
   useEffect(() => {
     navigate(`/group/${code}/results`);
   }, [code, navigate]);
   return (
-    <div className="min-h-screen flex items-center justify-center text-ink-300 text-sm">
+    <div className="min-h-screen flex items-center justify-center text-ink-300 text-base">
       Redirection vers les résultats...
     </div>
   );
