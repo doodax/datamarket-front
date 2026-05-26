@@ -57,7 +57,7 @@ export default function DataCard({ category, selected, disabled, relevance, show
         <div className="flex items-end justify-between mt-auto pt-1">
           <div className="font-mono text-terminal-cyan font-bold text-lg leading-none">
             {category.price}
-            <span className="text-ink-300 text-[10px] ml-1">CHF</span>
+            <span className="text-ink-200 text-[11px] ml-1">CHF</span>
           </div>
 
           {/* Indicateur de pertinence si activé */}
@@ -73,7 +73,7 @@ export default function DataCard({ category, selected, disabled, relevance, show
           )}
         </div>
 
-        <div className="text-[9px] font-mono text-ink-400 uppercase tracking-wider">
+        <div className="text-[11px] font-mono text-ink-200 uppercase tracking-wider">
           / 100 profils
         </div>
       </div>
