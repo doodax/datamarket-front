@@ -157,7 +157,7 @@ export default function HomeView() {
       {/* Footer */}
       <footer className="px-6 py-4 border-t border-ink-700/30 text-center">
         <div className="text-[9px] font-mono uppercase tracking-wider text-ink-400">
-          Toutes les données sont fictives · Compliance terms apply
+          Toutes les données sont fictives · &amp; Damien Cardinaux
         </div>
       </footer>
     </div>
