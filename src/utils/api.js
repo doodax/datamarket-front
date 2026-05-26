@@ -1,8 +1,5 @@
 // Module API mis à jour pour la version PHP du back.
-// Différences vs version Node :
-// - URL par défaut pointe vers le back PHP sur doodax.ch
-// - Quelques endpoints adaptés (params via querystring)
-// - Pas de WebSocket : tout passe par HTTP
+// v3 : ajout de reclaim() pour la reconnexion via code de transfert.
 
 const DEFAULT_API_URL = 'https://www.doodax.ch/datamarket';
 
@@ -64,9 +61,18 @@ export const api = {
   }),
   listSessions: (archived = false) => fetchJSON(`/api/sessions/mine?archived=${archived}`, { auth: true }),
   getSession: (code) => fetchJSON(`/api/sessions/${code}`),
-  joinSession: (code, group_number, group_label) => fetchJSON(`/api/sessions/${code}/join`, {
-    method: 'POST', body: JSON.stringify({ group_number, group_label })
+
+  joinSession: (code, group_number, group_label, claimed_group_id = null) => fetchJSON(`/api/sessions/${code}/join`, {
+    method: 'POST',
+    body: JSON.stringify({ group_number, group_label, claimed_group_id })
   }),
+
+  // Reprendre un groupe existant sur un nouvel appareil via le code de transfert.
+  reclaimGroup: (code, group_number, transfer_code) => fetchJSON(`/api/sessions/${code}/reclaim`, {
+    method: 'POST',
+    body: JSON.stringify({ group_number, transfer_code })
+  }),
+
   startSession: (code) => fetchJSON(`/api/sessions/${code}/start`, { method: 'POST', auth: true }),
   lockSession: (code) => fetchJSON(`/api/sessions/${code}/lock`, { method: 'POST', auth: true }),
   revealSession: (code) => fetchJSON(`/api/sessions/${code}/reveal`, { method: 'POST', auth: true }),

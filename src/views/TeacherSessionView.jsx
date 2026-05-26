@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Lock, Eye, Copy, FileDown, AlertTriangle, ChevronRight, Trash2 } from 'lucide-react';
+import { ArrowLeft, Play, Lock, Eye, Copy, FileDown, AlertTriangle, ChevronRight, Key } from 'lucide-react';
 import Logo from '../components/Logo';
 import Timer from '../components/Timer';
 import CompanyLogo from '../components/CompanyLogo';
@@ -17,7 +17,7 @@ export default function TeacherSessionView() {
     if (!isTeacherAuthenticated()) navigate('/teacher/login');
   }, [navigate]);
 
-  const { connected, sessionState, groups, timerRemaining, reports, synthesis, error } =
+  const { connected, sessionState, groups, timerRemaining, error } =
     useSessionSocket(code, 'teacher');
   const [actionError, setActionError] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -38,7 +38,6 @@ export default function TeacherSessionView() {
   const handleReveal = async () => {
     try {
       await api.revealSession(code);
-      // Naviguer vers la vue résultats
       navigate(`/teacher/session/${code}/results`);
     } catch (err) { setActionError(err.message); }
   };
@@ -69,7 +68,7 @@ export default function TeacherSessionView() {
   if (!config || !sessionState) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-ink-300 text-sm font-mono">
+        <div className="text-ink-300 text-base font-mono">
           {error ? `Erreur : ${error}` : 'Chargement de la session...'}
         </div>
       </div>
@@ -83,14 +82,12 @@ export default function TeacherSessionView() {
   const hasMoreMissions = sessionState.mode === 'shared_mission' && sessionState.shared_mission_ids &&
     (sessionState.current_mission_index || 0) + 1 < sessionState.shared_mission_ids.length;
 
-  const connectedGroups = groups.filter(g => Date.now() - g.last_seen_at < 30000);
-
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-ink-700/50 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Logo size="md" />
-          <div className="text-[10px] font-mono uppercase tracking-wider text-ink-300">
+          <div className="text-xs font-mono uppercase tracking-wider text-ink-300">
             Mode pilotage
           </div>
         </div>
@@ -103,7 +100,6 @@ export default function TeacherSessionView() {
       </header>
 
       <main className="flex-1 px-6 py-6 max-w-7xl w-full mx-auto">
-        {/* Header session */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 justify-between mb-6">
           <div className="flex items-center gap-4 flex-1">
             <div>
@@ -120,7 +116,7 @@ export default function TeacherSessionView() {
                 <CompanyLogo logoStyle={currentMission.logo_style} color={currentMission.color_palette.primary} size={32} />
                 <div>
                   <div className="font-display text-lg">{currentMission.company_name}</div>
-                  <div className="text-xs text-ink-300">{currentMission.sector}</div>
+                  <div className="text-sm text-ink-300">{currentMission.sector}</div>
                 </div>
               </div>
             )}
@@ -132,7 +128,6 @@ export default function TeacherSessionView() {
           />
         </div>
 
-        {/* Actions */}
         <div className="panel-bordered p-4 mb-6 flex flex-wrap items-center gap-2">
           {sessionState.state === 'setup' && (
             <>
@@ -144,7 +139,7 @@ export default function TeacherSessionView() {
                 <Play size={16} />
                 Démarrer le timer
               </button>
-              <div className="text-xs text-ink-300">
+              <div className="text-sm text-ink-300">
                 {groups.length} groupe{groups.length > 1 ? 's' : ''} connecté{groups.length > 1 ? 's' : ''}
               </div>
             </>
@@ -207,7 +202,6 @@ export default function TeacherSessionView() {
           </div>
         )}
 
-        {/* Confirm verrouillage */}
         {confirmAction === 'lock' && (
           <div className="bg-ink-800 border border-terminal-amber/50 p-4 mb-4 flex items-center gap-4">
             <AlertTriangle className="text-terminal-amber" size={20} />
@@ -219,12 +213,11 @@ export default function TeacherSessionView() {
           </div>
         )}
 
-        {/* Groupes */}
         <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
           {groups.length === 0 ? (
             <div className="col-span-full panel-bordered p-12 text-center text-ink-300">
-              <div className="text-sm mb-2">Aucun groupe connecté.</div>
-              <div className="text-xs font-mono">Partagez le code : <span className="text-terminal-cyan">{code}</span></div>
+              <div className="text-base mb-2">Aucun groupe connecté.</div>
+              <div className="text-sm font-mono">Partagez le code : <span className="text-terminal-cyan">{code}</span></div>
             </div>
           ) : (
             groups.map(g => (
@@ -238,6 +231,7 @@ export default function TeacherSessionView() {
 }
 
 function GroupCard({ group, mission, config }) {
+  const [codeCopied, setCodeCopied] = useState(false);
   const isLive = Date.now() - group.last_seen_at < 30000;
   const purchasedTotal = group.purchases.length;
   const categoriesMap = Object.fromEntries(
@@ -246,11 +240,19 @@ function GroupCard({ group, mission, config }) {
   const spent = (mission?.budget || 500) - group.budget_remaining;
   const budgetPercent = (spent / (mission?.budget || 500)) * 100;
 
+  const copyTransferCode = (e) => {
+    e.stopPropagation();
+    if (!group.transfer_code) return;
+    navigator.clipboard.writeText(group.transfer_code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 1500);
+  };
+
   return (
     <div className="panel-bordered p-4">
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-3 gap-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <div className="font-mono text-sm text-terminal-cyan">G{group.group_number}</div>
             <div className="text-base font-medium truncate">
               {group.group_label || `Groupe ${group.group_number}`}
@@ -259,16 +261,29 @@ function GroupCard({ group, mission, config }) {
             {group.locked && <span className="chip-warning">verrouillé</span>}
           </div>
           {mission && (
-            <div className="text-xs text-ink-300">
+            <div className="text-sm text-ink-300">
               {mission.company_name} — {mission.sector}
             </div>
           )}
         </div>
+
+        {/* Code de reconnexion */}
+        {group.transfer_code && (
+          <button
+            onClick={copyTransferCode}
+            className="flex items-center gap-1.5 px-2 py-1 border border-ink-600 hover:border-terminal-amber text-terminal-amber font-mono text-sm transition-colors shrink-0"
+            title="Code de reconnexion — cliquer pour copier"
+          >
+            <Key size={12} />
+            <span className="tracking-wider font-bold">{group.transfer_code}</span>
+            {codeCopied && <span className="text-xs text-terminal-green">✓</span>}
+          </button>
+        )}
       </div>
 
       <div className="space-y-2 mb-3">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-ink-300 font-mono">Budget</span>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-ink-300 font-mono text-xs">Budget</span>
           <span className="font-mono">
             <span className="text-terminal-cyan">{spent}</span>
             <span className="text-ink-400"> / {mission?.budget || 500} CHF</span>
@@ -282,19 +297,19 @@ function GroupCard({ group, mission, config }) {
         </div>
       </div>
 
-      <div className="text-xs text-ink-300 mb-2 font-mono">
+      <div className="text-sm text-ink-300 mb-2 font-mono">
         {purchasedTotal} catégorie{purchasedTotal > 1 ? 's' : ''} achetée{purchasedTotal > 1 ? 's' : ''}
       </div>
 
       <div className="flex flex-wrap gap-1">
         {group.purchases.length === 0 ? (
-          <span className="text-xs text-ink-400 italic">Aucun achat pour le moment</span>
+          <span className="text-sm text-ink-400 italic">Aucun achat pour le moment</span>
         ) : (
           group.purchases.map(pid => {
             const cat = categoriesMap[pid];
             if (!cat) return null;
             return (
-              <span key={pid} className="text-[10px] px-1.5 py-0.5 bg-ink-700 text-ink-100 font-mono">
+              <span key={pid} className="text-xs px-1.5 py-0.5 bg-ink-700 text-ink-100 font-mono">
                 {cat.name.slice(0, 30)}{cat.name.length > 30 ? '…' : ''}
               </span>
             );
