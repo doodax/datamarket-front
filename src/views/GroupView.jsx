@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, ShoppingCart, Wallet, Briefcase, FileText, Clock } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, ShoppingCart, Wallet, Briefcase, FileText, Clock, Copy, Check } from 'lucide-react';
 import Logo from '../components/Logo';
 import Timer from '../components/Timer';
 import DataCard from '../components/DataCard';
@@ -89,7 +89,7 @@ export default function GroupView() {
 }
 
 // ============================================================
-// FORMULAIRE DE JOIN (avec polling et claimed_group_id)
+// FORMULAIRE DE JOIN
 // ============================================================
 function GroupJoinForm({ code, onJoined, navigate }) {
   const [groupNumber, setGroupNumber] = useState('');
@@ -245,6 +245,40 @@ function GroupJoinForm({ code, onJoined, navigate }) {
 }
 
 // ============================================================
+// AFFICHAGE DU CODE DE RECONNEXION
+// ============================================================
+function ReconnectionCode({ code }) {
+  const [copied, setCopied] = useState(false);
+
+  if (!code) return null;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1.5 text-xs font-mono text-terminal-amber hover:text-amber-300 transition-colors group"
+      title="Cliquer pour copier"
+    >
+      <span className="uppercase tracking-wider text-ink-400 group-hover:text-ink-300">
+        Code reconnexion
+      </span>
+      <span className="font-bold tracking-[0.2em] text-base">{code}</span>
+      {copied ? (
+        <Check size={12} className="text-terminal-green" />
+      ) : (
+        <Copy size={12} className="opacity-60 group-hover:opacity-100" />
+      )}
+    </button>
+  );
+}
+
+// ============================================================
 // VUE DE JEU PRINCIPALE
 // ============================================================
 function GroupGameView({ code, group, mission, config, sessionState, timerRemaining, connected }) {
@@ -268,7 +302,7 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
   const budgetRemaining = mission.budget - spending;
   const setupPhase = sessionState.state === 'setup';
   const locked = group.locked || sessionState.state === 'locked' || sessionState.state === 'revealed';
-  const catalogVisible = !setupPhase;  // Catalogue caché tant que le timer n'a pas démarré
+  const catalogVisible = !setupPhase;
 
   const togglePurchase = async (categoryId) => {
     if (locked || setupPhase) return;
@@ -333,6 +367,7 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
               <div className="font-mono text-lg text-terminal-cyan">
                 G{group.group_number} · {group.group_label || `Équipe ${group.group_number}`}
               </div>
+              <ReconnectionCode code={group.transfer_code} />
             </div>
           </div>
           <Timer
@@ -341,10 +376,17 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
             state={sessionState.state}
           />
         </div>
+
+        {/* Version mobile : code visible sous le header principal */}
+        <div className="md:hidden max-w-7xl mx-auto mt-2 pt-2 border-t border-ink-700/40 flex items-center justify-between text-xs">
+          <div className="font-mono text-terminal-cyan">
+            G{group.group_number} · {group.group_label || `Équipe ${group.group_number}`}
+          </div>
+          <ReconnectionCode code={group.transfer_code} />
+        </div>
       </header>
 
       <main className="flex-1 px-6 py-6 max-w-7xl w-full mx-auto">
-        {/* === MISSION : toujours affichée === */}
         {showMission && (
           <div className="panel-bordered p-5 mb-6 relative animate-slide-up">
             {!setupPhase && (
@@ -375,7 +417,6 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
           </button>
         )}
 
-        {/* === PHASE SETUP : grand panneau d'attente, pas de catalogue === */}
         {setupPhase && (
           <div className="panel-bordered p-12 text-center animate-fade-in my-6">
             <div className="inline-flex w-16 h-16 bg-ink-700 border border-terminal-amber items-center justify-center mb-6 animate-pulse">
@@ -397,10 +438,23 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
               {' · '}
               Durée prévue : <span className="text-terminal-cyan font-bold">{Math.round(sessionState.timer_duration_seconds / 60)} min</span>
             </div>
+            {group.transfer_code && (
+              <div className="mt-6 pt-6 border-t border-ink-700/40 text-sm">
+                <div className="text-ink-300 mb-1">
+                  <span className="text-xs font-mono uppercase tracking-wider text-ink-400">Code de reconnexion</span>
+                </div>
+                <div className="text-3xl font-mono font-bold text-terminal-amber tracking-[0.3em]">
+                  {group.transfer_code}
+                </div>
+                <div className="text-xs text-ink-400 mt-2 max-w-sm mx-auto">
+                  Notez ce code. Il vous permettra de reprendre votre groupe
+                  depuis un autre appareil en cas de problème.
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* === LOCKED : message verrouillé === */}
         {locked && !setupPhase && (
           <div className="bg-ink-800 border border-ink-500 px-4 py-3 mb-4 text-sm flex items-center gap-2">
             <AlertTriangle size={16} className="text-terminal-amber" />
@@ -408,7 +462,6 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
           </div>
         )}
 
-        {/* === CATALOGUE : visible uniquement après démarrage du timer === */}
         {catalogVisible && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
