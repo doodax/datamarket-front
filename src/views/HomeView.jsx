@@ -94,8 +94,8 @@ export default function HomeView() {
 
           {/* Slogan */}
           <div className="text-center space-y-3 animate-fade-in">
-            <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-terminal-cyan">
-              THE WORLD'S LEADING DATA MARKETPLACE
+            <div className="text-[12px] font-mono uppercase tracking-[0.3em] text-terminal-cyan">
+              Un jeu pour comprendre les enjeux du BigData
             </div>
             <h1 className="text-2xl font-display font-light text-ink-100 leading-tight">
               Acheter des données.<br />
