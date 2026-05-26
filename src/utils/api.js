@@ -85,6 +85,11 @@ export const api = {
     if (!res.ok) throw new Error('Export failed');
     return res.blob();
   },
+  extendSession: (code, seconds) => fetchJSON(`/api/sessions/${code}/extend`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify({ seconds }),
+  }),
 
   updatePurchases: (groupId, purchases) => fetchJSON(`/api/groups/${groupId}/purchases`, {
     method: 'PUT', body: JSON.stringify({ purchases })

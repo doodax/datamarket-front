@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Lock, Eye, Copy, FileDown, AlertTriangle, ChevronRight, Key } from 'lucide-react';
+import { ArrowLeft, Play, Lock, Eye, Copy, FileDown, AlertTriangle, ChevronRight, Key, Clock } from 'lucide-react';
 import Logo from '../components/Logo';
 import Timer from '../components/Timer';
 import CompanyLogo from '../components/CompanyLogo';
@@ -45,6 +45,12 @@ export default function TeacherSessionView() {
   const handleNextMission = async () => {
     try {
       await api.nextMission(code);
+    } catch (err) { setActionError(err.message); }
+  };
+
+  const handleExtend = async (seconds) => {
+    try {
+      await api.extendSession(code, seconds);
     } catch (err) { setActionError(err.message); }
   };
 
@@ -157,16 +163,31 @@ export default function TeacherSessionView() {
             </>
           )}
           {sessionState.state === 'locked' && (
-            <>
-              <button onClick={handleReveal} className="btn-primary flex items-center gap-2">
-                <Eye size={16} />
-                Révéler les résultats
-              </button>
-              <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
-                <FileDown size={16} />
-                Exporter
-              </button>
-            </>
+              <>
+                <button onClick={handleReveal} className="btn-primary flex items-center gap-2">
+                  <Eye size={16} />
+                  Révéler les résultats
+                </button>
+                <div className="flex items-center gap-1.5 pl-2 ml-1 border-l border-ink-700">
+                <span className="text-xs font-mono uppercase tracking-wider text-terminal-amber flex items-center gap-1.5">
+                  <Clock size={14} />
+                  Relancer
+                </span>
+                  <button onClick={() => handleExtend(120)} className="btn-ghost font-mono text-sm border border-ink-600 hover:border-terminal-amber px-2.5 py-1">
+                    +2 min
+                  </button>
+                  <button onClick={() => handleExtend(300)} className="btn-ghost font-mono text-sm border border-ink-600 hover:border-terminal-amber px-2.5 py-1">
+                    +5 min
+                  </button>
+                  <button onClick={() => handleExtend(600)} className="btn-ghost font-mono text-sm border border-ink-600 hover:border-terminal-amber px-2.5 py-1">
+                    +10 min
+                  </button>
+                </div>
+                <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
+                  <FileDown size={16} />
+                  Exporter
+                </button>
+              </>
           )}
           {sessionState.state === 'revealed' && (
             <>
