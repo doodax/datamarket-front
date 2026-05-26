@@ -398,6 +398,16 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
               </button>
             )}
             <div className="section-header mb-3">Votre mission</div>
+
+            <div className="mb-4 border-l-2 border-terminal-cyan bg-terminal-cyan/5 px-4 py-2.5">
+              <p className="text-sm text-ink-100">
+                <span className="font-mono uppercase tracking-wider text-xs text-terminal-cyan mr-2">
+                  Rappel Dataflow™
+                </span>
+                la valeur est dans le croisement. Une donnée seule ne vaut presque rien.
+              </p>
+            </div>
+
             <p className="text-ink-100 text-base leading-relaxed mb-3">{mission.brief}</p>
 
             {mission.internal_note && (
@@ -418,26 +428,51 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
         )}
 
         {setupPhase && (
-          <div className="panel-bordered p-12 text-center animate-fade-in my-6">
-            <div className="inline-flex w-16 h-16 bg-ink-700 border border-terminal-amber items-center justify-center mb-6 animate-pulse">
-              <Clock size={32} className="text-terminal-amber" />
-            </div>
-            <div className="text-xs font-mono uppercase tracking-[0.3em] text-terminal-amber mb-3">
-              En attente
-            </div>
-            <h2 className="text-2xl font-display text-ink-100 mb-3">
-              Le marché des données ouvrira sous peu
-            </h2>
-            <p className="text-base text-ink-300 max-w-md mx-auto leading-relaxed">
-              Lisez attentivement votre mission ci-dessus.
-              Le catalogue des données disponibles s'ouvrira dès que l'administrateur·rice
-              aura démarré le compte à rebours.
-            </p>
-            <div className="mt-6 text-sm font-mono text-ink-400">
-              Budget alloué : <span className="text-terminal-cyan font-bold">{mission.budget} CHF</span>
-              {' · '}
-              Durée prévue : <span className="text-terminal-cyan font-bold">{Math.round(sessionState.timer_duration_seconds / 60)} min</span>
-            </div>
+            <div className="panel-bordered p-12 text-center animate-fade-in my-6">
+              <div className="inline-flex w-16 h-16 bg-ink-700 border border-terminal-amber items-center justify-center mb-6 animate-pulse">
+                <Clock size={32} className="text-terminal-amber" />
+              </div>
+              <div className="text-xs font-mono uppercase tracking-[0.3em] text-terminal-amber mb-3">
+                En attente
+              </div>
+              <h2 className="text-2xl font-display text-ink-100 mb-3">
+                Le marché des données ouvrira sous peu
+              </h2>
+              <p className="text-base text-ink-300 max-w-md mx-auto leading-relaxed">
+                Lisez attentivement votre mission ci-dessus.
+                Le catalogue des données disponibles s'ouvrira dès que l'administrateur·rice
+                aura démarré le compte à rebours.
+              </p>
+
+              <div className="mt-8 pt-6 border-t border-ink-700/40 max-w-2xl mx-auto text-left">
+                <div className="text-xs font-mono uppercase tracking-[0.3em] text-terminal-cyan mb-3 text-center">
+                  ━━ Un mot de Dataflow™ ━━
+                </div>
+                <p className="text-base text-ink-200 leading-relaxed mb-3">
+                  Vous êtes responsable acquisition pour votre marque. Dans quelques instants,
+                  notre marketplace va ouvrir : 15 catégories de données, un budget, un compte à rebours.
+                </p>
+                <p className="text-base text-ink-200 leading-relaxed mb-3">
+                  <span className="text-terminal-cyan">Un conseil de la maison :</span> nos meilleurs clients
+                  ne sont pas ceux qui achètent le plus. Ce sont ceux qui achètent <em className="text-ink-100 not-italic font-semibold">les bonnes combinaisons</em>.
+                  Une donnée isolée, c'est une ligne dans un tableau. Deux ou trois données qui se parlent,
+                  c'est un portrait. Un portrait, ça vaut beaucoup plus cher qu'une ligne.
+                </p>
+                <p className="text-base text-ink-200 leading-relaxed mb-4">
+                  Prenez le temps de réfléchir avant de cliquer. Demandez-vous, pour chaque achat :
+                  <em className="text-ink-100 not-italic"> qu'est-ce que cette donnée raconte une fois mise à côté des autres ?</em>
+                  {' '}Votre rapport de campagne, à la fin, vous dira si votre intuition était la bonne.
+                </p>
+                <p className="text-xs font-mono uppercase tracking-[0.3em] text-ink-400 text-center mt-4">
+                  Dataflow™ — Where data meets purpose.
+                </p>
+              </div>
+
+              <div className="mt-8 text-sm font-mono text-ink-400">
+                Budget alloué : <span className="text-terminal-cyan font-bold">{mission.budget} CHF</span>
+                {' · '}
+                Durée prévue : <span className="text-terminal-cyan font-bold">{Math.round(sessionState.timer_duration_seconds / 60)} min</span>
+              </div>
             {group.transfer_code && (
               <div className="mt-6 pt-6 border-t border-ink-700/40 text-sm">
                 <div className="text-ink-300 mb-1">
