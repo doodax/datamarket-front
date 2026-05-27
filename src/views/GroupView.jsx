@@ -453,10 +453,10 @@ function GroupGameView({ code, group, mission, config, sessionState, timerRemain
                     notre marketplace va ouvrir : 15 catégories de données, un budget, un compte à rebours.
                   </p>
                   <p className="text-base text-ink-200 leading-relaxed mb-3">
-                    <span className="text-terminal-cyan">Un conseil de la maison :</span> nos meilleurs clients
+                    <span className="text-terminal-cyan">Un conseil stratégique :</span> nos meilleurs clients
                     ne sont pas ceux qui achètent le plus. Ce sont ceux qui achètent <em className="text-ink-100 not-italic font-semibold">les bonnes combinaisons</em>.
                     Une donnée isolée, c'est une ligne dans un tableau. Deux ou trois données qui se parlent,
-                    c'est un profile. Plus le profile est précis, plus notre modèle marketing est rentable.
+                    c'est un profile. <span className="text-terminal-cyan">Plus le profile est précis, plus notre modèle marketing est rentable</span>.
                   </p>
                   <p className="text-base text-ink-200 leading-relaxed mb-4">
                     Prenez le temps de réfléchir avant de cliquer. Demandez-vous, pour chaque achat :
